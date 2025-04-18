@@ -59,9 +59,24 @@ module gamesuite_sui::leaderboard {
     use sui::sui::SUI;
 
     const OneCoinNineDecimals: u64 = 1000000000;
+    const VERSION: u64 = 1;
+
+    // public struct ProjectRegistryEntry has key, store {
+    //      id: UID,
+    //      projectAddy: address,
+    //      projectCapAddy: address,
+    //      projectOwner: address
+    // }    
+
+    // public struct ProjectRegistry has key, store {
+    //      id: UID,
+    //      version: u64,
+    //      projects: Table<address, ProjectRegistryEntry>,
+    // }  
 
     public struct ProjectCap has key {
          id: UID,
+         name: String,
          projectId: address
     }
 
@@ -78,7 +93,7 @@ module gamesuite_sui::leaderboard {
         id: UID,
         admin: address,
         project: address,
-        public_key: vector<u8>, // Server's public key
+        project_server_keypair_public_key: vector<u8>, // Server's public key
         private: bool,
         name: String,
         unit: String,
@@ -94,7 +109,12 @@ module gamesuite_sui::leaderboard {
 
     // Initialize the leaderboard
     fun init(ctx: &mut TxContext) {
-
+        // transfer::public_share_object(ProjectRegistry {
+        //     id: object::new(ctx),
+        //     version: VERSION,
+        //     projects: table::new<address, ProjectRegistryEntry>(ctx)
+        // });
+        //DO NOT NEED PROJECT REGISTRY, JUST HAVE PROJECT MANAGER GET ALL PROJECTCAP OBJECTS OWNED (each has projectId in it) TO GET LIST OF PROJECTS
     }
 
     public entry fun pay_start_game_fee(mut payment: Coin<SUI>, ctx: &mut TxContext) {
@@ -108,7 +128,7 @@ module gamesuite_sui::leaderboard {
         transfer::public_transfer(payment, tx_context::sender(ctx));
     }
 
-    public fun create_project(name: String, payment: Coin<SUI>, ctx: &mut TxContext) : ProjectCap {
+    public fun create_project(name: String, payment: Coin<SUI>, ctx: &mut TxContext) {
         let project = Project {
             id: object::new(ctx),
             admin: tx_context::sender(ctx),
@@ -119,11 +139,12 @@ module gamesuite_sui::leaderboard {
         let projectId = object::uid_to_address(&project.id);
         let projectCap = ProjectCap {
             id: object::new(ctx),
+            name: name,
             projectId: projectId
         };
         pay_start_game_fee(payment, ctx);
         transfer::public_share_object(project);
-        projectCap
+        transfer::transfer(projectCap, ctx.sender());
     }
 
     public entry fun create_leaderboard(projectCap: &ProjectCap, name: String, unit: String, sortDesc: bool, description: String, project: &mut Project, public_key: vector<u8>, payment: Coin<SUI>, ctx: &mut TxContext){
@@ -134,7 +155,7 @@ module gamesuite_sui::leaderboard {
             id: object::new(ctx),
             admin: tx_context::sender(ctx),
             project: projId,
-            public_key: public_key, // Set this during deployment
+            project_server_keypair_public_key: public_key, // Set this during deployment
             private: false,
             name: name,
             unit: unit,
@@ -166,7 +187,7 @@ module gamesuite_sui::leaderboard {
 
         // Verify signature
         assert!(
-            ed25519::ed25519_verify(&signature, &leaderboard.metadata.public_key, &message),
+            ed25519::ed25519_verify(&signature, &leaderboard.metadata.project_server_keypair_public_key, &message),
             100, // Invalid signature error code
         );
 
